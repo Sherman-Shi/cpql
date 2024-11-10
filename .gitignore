@@ -1,1 +1,13 @@
 /results
+/wandb
+/agents/__pycache__/
+/utils/__pycache__/
+__pycache__/
+
+*.pyc
+*.pyc
+*.cpython-38.pyc
+utils/__pycache__/__init__.cpython-38.pyc
+utils/__pycache__/data_sampler.cpython-38.pyc
+utils/__pycache__/logger.cpython-38.pyc
+utils/__pycache__/utils.cpython-38.pyc

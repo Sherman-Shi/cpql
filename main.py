@@ -10,6 +10,7 @@ from utils import utils
 from utils.data_sampler import Data_Sampler
 from utils.logger import logger, setup_logger
 from torch.utils.tensorboard import SummaryWriter
+import wandb  # Import W&B
 
 
 offline_hyperparameters = {
@@ -38,6 +39,9 @@ online_hyperparameters = {
 }
 
 def train_agent(env, state_dim, action_dim, device, output_dir, args):
+
+    wandb.init(project="consistency_debug", config=args.__dict__)
+
     if args.rl_type == 'offline':
         # Load buffer
         dataset = d4rl.qlearning_dataset(env)
@@ -88,7 +92,16 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
             writer.add_scalar('Loss/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
             writer.add_scalar('Loss/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
             writer.add_scalar('Loss/critic_loss', np.mean(loss_metric['critic_loss']), training_iters)
-            
+
+            # Log losses to W&B
+            wandb.log({
+                'Loss/bc_loss': np.mean(loss_metric['bc_loss']),
+                'Loss/ql_loss': np.mean(loss_metric['ql_loss']),
+                'Loss/actor_loss': np.mean(loss_metric['actor_loss']),
+                'Loss/critic_loss': np.mean(loss_metric['critic_loss']),
+                'Training Iterations': training_iters,
+            })     
+
             # Logging
             if training_iters % log_interval == 0:
                 if loss_metric is not None:
@@ -106,6 +119,13 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                                                                                        args.env_name, 
                                                                                        args.seed,
                                                                                        eval_episodes=args.eval_episodes)
+                # wandb log 
+                wandb.log({
+                    'Eval/avg': eval_res,
+                    'Eval/std': eval_res_std,
+                    'Eval/norm_avg': eval_norm_res,
+                    'Eval/norm_std': eval_norm_res_std,
+                })
 
                 writer.add_scalar('Eval/avg', eval_res, training_iters)
                 writer.add_scalar('Eval/std', eval_res_std, training_iters)
@@ -141,8 +161,16 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                     loss_metric = None
 
                 training_iters += 1
-                
+
+   
                 if loss_metric is not None:
+                    wandb.log({
+                        'Loss/bc_loss': np.mean(loss_metric['bc_loss']),
+                        'Loss/ql_loss': np.mean(loss_metric['ql_loss']),
+                        'Loss/actor_loss': np.mean(loss_metric['actor_loss']),
+                        'Loss/critic_loss': np.mean(loss_metric['critic_loss']),
+                        'Training Iterations': training_iters,
+                    })
                     writer.add_scalar('Loss/bc_loss', np.mean(loss_metric['bc_loss']), training_iters)
                     writer.add_scalar('Loss/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
                     writer.add_scalar('Loss/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
@@ -166,7 +194,13 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                                                                args.seed,
                                                                eval_episodes=args.eval_episodes)
                     done = True
-
+                    
+                    wandb.log({
+                        'Eval/avg': eval_res,
+                        'Eval/std': eval_res_std,
+                        'Training Iterations': training_iters,
+                    })
+                    
                     writer.add_scalar('Eval/avg', eval_res, training_iters)
                     writer.add_scalar('Eval/std', eval_res_std, training_iters)
 
