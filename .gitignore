@@ -3,11 +3,14 @@
 /agents/__pycache__/
 /utils/__pycache__/
 __pycache__/
+/logs
 
 *.pyc
 *.pyc
+*.log
 *.cpython-38.pyc
 utils/__pycache__/__init__.cpython-38.pyc
 utils/__pycache__/data_sampler.cpython-38.pyc
 utils/__pycache__/logger.cpython-38.pyc
 utils/__pycache__/utils.cpython-38.pyc
+
