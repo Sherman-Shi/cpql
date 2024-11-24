@@ -40,7 +40,7 @@ online_hyperparameters = {
 
 def train_agent(env, state_dim, action_dim, device, output_dir, args):
 
-    wandb.init(project="consistency_debug", config=args.__dict__)
+    wandb.init(project="consistency_dev", group=args.group, config=args.__dict__)
 
     if args.rl_type == 'offline':
         # Load buffer
@@ -64,6 +64,7 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                   grad_norm=args.gn,
                   q_mode=args.q_mode,
                   sampler=args.sampler,
+                  sample_num=args.sample_num,
                   expectile=args.expectile,
                   memory_size=args.memory_size,)
 
@@ -260,12 +261,16 @@ if __name__ == "__main__":
     parser.add_argument('--save_checkpoints', action='store_true')
 
     parser.add_argument("--num_steps_per_epoch", default=1000, type=int)
-    parser.add_argument("--online_start_steps", default=10000, type=int)
+    parser.add_argument("--online_start_steps", default=1000, type=int)
     parser.add_argument("--memory_size", default=1e6, type=int)
     parser.add_argument("--batch_size", default=256, type=int, help='batch size (default: 256)')
     parser.add_argument("--lr_decay", action='store_true')
     parser.add_argument("--discount", default=0.99, type=float, help='discount factor for reward (default: 0.99)')
+    parser.add_argument("--sampler", default="onestep_quasi_monte_carlo")
+    parser.add_argument("--sample_num", default=10)
 
+    # wandb log
+    parser.add_argument("--group", default="Quasi-CPQL-dev", type=str)
     args = parser.parse_args()
 
     if args.rl_type == 'online' and args.q_mode == 'q_v':

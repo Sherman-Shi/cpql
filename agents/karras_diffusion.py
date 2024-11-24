@@ -1,9 +1,42 @@
 
 import torch as th
 import numpy as np
+import math 
+
+from scipy.special import erfinv
+from scipy.stats import norm, qmc
 
 from agents.helpers import append_dims, append_zero, mean_flat
 
+
+def Normdf_inv(sample):
+    v = 0.5 + (1 - np.finfo(sample.dtype).eps) * (sample - 0.5)
+    norm_sample = erfinv(2 * v - 1) * math.sqrt(2)
+    return norm_sample
+
+def generate_qmc_normal_samples(dim, num_samples, seed=None):
+    """
+    Generate samples from a multivariate normal distribution using Quasi-Monte Carlo
+    sampling with a scrambled Sobol sequence.
+
+    Parameters:
+    - dim (int): Dimension of the normal distribution (number of independent normal variables).
+    - num_samples (int): Number of samples to generate.
+    - seed (int, optional): Seed for the random number generator used in scrambling.
+
+    Returns:
+    - numpy.ndarray: Samples from a multivariate normal distribution.
+    """
+    # Initialize the Sobol sequence generator with scrambling
+    sobol = qmc.Sobol(d=dim, scramble=True, seed=seed)
+    
+    # Generate QMC samples from a uniform distribution [0, 1)
+    uniform_samples = sobol.random(n=num_samples)
+
+    # Convert uniform samples to normal samples using the inverse CDF (quantile function)
+    normal_samples = Normdf_inv(uniform_samples)
+
+    return th.tensor(normal_samples, dtype=th.float32)
 
 def get_weightings(weight_schedule, snrs, sigma_data):
     if weight_schedule == "snr":
@@ -33,6 +66,7 @@ class KarrasDenoiser:
         steps=40,
         ts=None,
         sampler="onestep", 
+        sample_num=10,
         clip_denoised=True,
     ):
         self.action_dim = action_dim
@@ -46,6 +80,7 @@ class KarrasDenoiser:
         self.device = device
         
         self.sampler = sampler
+        self.sample_num = sample_num
         self.steps = steps
         self.ts = [0, 20, 40]
 
@@ -166,11 +201,15 @@ class KarrasDenoiser:
             denoised = denoised.clamp(-1, 1)
         return model_output, denoised
 
-    def sample(self, model, state, num=10):
+    def sample(self, model, state):
         if self.sampler == "onestep":  
-            x_0 = self.sample_onestep(model, state, num=num)
+            x_0 = self.sample_onestep(model, state, num=self.sample_num)
         elif self.sampler == "multistep":
             x_0 = self.sample_multistep(model, state)
+        elif self.sampler == "onestep_monte_carlo":
+            x_0 = self.sample_monte_carlo(model, state, num=self.sample_num)
+        elif self.sampler == "onestep_quasi_monte_carlo":
+            x_0 = self.sample_quasi_monte_carlo(model, state, num=self.sample_num)
         else:
             raise ValueError(f"Unknown sampler {self.sampler}")
 
@@ -188,7 +227,37 @@ class KarrasDenoiser:
             x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
             s_in = x_T.new_ones([x_T.shape[0]])
             return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
-    
+        
+    def sample_monte_carlo(self, model, state, num=1000):
+        """
+        Monte Carlo sampling using standard normal distribution.
+        """
+        if state is not None:
+            x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
+            s_in = x_T.new_ones([x_T.shape[0]])
+            state_repeated = state.repeat(num, 1)
+            return self.denoise(model, x_T, self.sigmas[0] * s_in, state_repeated)[1]
+        else:
+            x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
+            s_in = x_T.new_ones([x_T.shape[0]])
+            return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
+
+    def sample_quasi_monte_carlo(self, model, state, num=1000, seed=None):
+        """
+        Quasi-Monte Carlo sampling using scrambled Sobol sequence.
+        """
+        dim = self.action_dim
+        if state is not None:
+            # Generate QMC samples
+            qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device) * self.sigma_max
+            s_in = qmc_samples.new_ones([qmc_samples.shape[0]])
+            state_repeated = state.repeat(num, 1)
+            return self.denoise(model, qmc_samples, self.sigmas[0] * s_in, state_repeated)[1]
+        else:
+            qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device) * self.sigma_max
+            s_in = qmc_samples.new_ones([qmc_samples.shape[0]])
+            return self.denoise(model, qmc_samples, self.sigmas[0] * s_in, None)[1]
+        
     def sample_multistep(self, model, state, num=1000):
         if state is not None:
             x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max

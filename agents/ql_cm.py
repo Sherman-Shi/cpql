@@ -35,6 +35,7 @@ class CPQL(object):
                  sigma_max=80.0,
                  expectile=0.6,
                  sampler="onestep",
+                 sample_num=10,
                  memory_size=1e6,
                  ):
 
@@ -45,7 +46,8 @@ class CPQL(object):
         self.diffusion = KarrasDenoiser(action_dim=action_dim, 
                                         sigma_max=sigma_max,
                                         device=device,
-                                        sampler=sampler,)
+                                        sampler=sampler,
+                                        sample_num=sample_num)
 
         self.lr_decay = lr_decay
         self.grad_norm = grad_norm
@@ -152,9 +154,9 @@ class CPQL(object):
         consistency_loss = bc_losses["consistency_loss"].mean()
         recon_loss = bc_losses["recon_loss"].mean()
 
-        new_action = self.diffusion.sample(model=self.actor, state=state)
-
-        q1_new_action, q2_new_action = self.critic(state, new_action)
+        new_actions = self.diffusion.sample(model=self.actor, state=state)
+        state_rpt = state.repeat_interleave(self.diffusion.sample_num, dim=0)
+        q1_new_action, q2_new_action = self.critic(state_rpt, new_actions)
         if self.rl_type == "offline":
             if np.random.uniform() > 0.5:
                 q_loss = - q1_new_action.mean() / q2_new_action.abs().mean().detach()
