@@ -251,23 +251,23 @@ if __name__ == "__main__":
     ### Experimental Setups ###
     parser.add_argument('--device', default=0, type=int) 
 
-    parser.add_argument('--rl_type', default="offline", type=str, help='offline or online RL tasks (default: offline)') 
+    parser.add_argument('--rl_type', default="onfline", type=str, help='offline or online RL tasks (default: offline)') 
     parser.add_argument("--q_mode", default="q", type=str, help='q for CPQL and q_v for CPIQL') 
 
-    parser.add_argument("--env_name", default="hopper-medium-expert-v2", type=str, help='Mujoco Gym environment') 
+    parser.add_argument("--env_name", default="HalfCheetah-v3", type=str, help='Mujoco Gym environment') 
     parser.add_argument("--seed", default=0, type=int, help='random seed (default: 0)') 
 
     parser.add_argument("--dir", default="results", type=str) 
     parser.add_argument('--save_checkpoints', action='store_true')
 
     parser.add_argument("--num_steps_per_epoch", default=1000, type=int)
-    parser.add_argument("--online_start_steps", default=1000, type=int)
+    parser.add_argument("--online_start_steps", default=10000, type=int)
     parser.add_argument("--memory_size", default=1e6, type=int)
     parser.add_argument("--batch_size", default=256, type=int, help='batch size (default: 256)')
     parser.add_argument("--lr_decay", action='store_true')
     parser.add_argument("--discount", default=0.99, type=float, help='discount factor for reward (default: 0.99)')
     parser.add_argument("--sampler", default="onestep_quasi_monte_carlo")
-    parser.add_argument("--sample_num", default=10)
+    parser.add_argument("--sample_num", default=10, type=int)
 
     # wandb log
     parser.add_argument("--group", default="Quasi-CPQL-dev", type=str)
@@ -290,11 +290,11 @@ if __name__ == "__main__":
         if 'antmaze' in args.env_name:
             args.max_q_backup = True
             args.reward_tune = 'cql_antmaze'
-            args.sampler = 'multistep'
+            #args.sampler = 'multistep'
         else:
             args.max_q_backup = False
             args.reward_tune = 'no'
-            args.sampler = 'onestep'
+            #args.sampler = 'onestep'
 
         args.eval_freq = 50
         args.eval_episodes = 10 if 'v2' in args.env_name else 100
@@ -308,7 +308,7 @@ if __name__ == "__main__":
 
         args.max_q_backup = False
         args.reward_tune = 'no'
-        args.sampler = 'onestep'
+        #args.sampler = 'onestep'
     
         args.eval_freq = 50
         args.eval_episodes = 10 

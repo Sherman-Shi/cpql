@@ -112,7 +112,7 @@ class CPQL(object):
                 target_q2 = target_q2.view(batch_size, 10).max(dim=1, keepdim=True)[0]
                 target_q = torch.min(target_q1, target_q2)
             else:
-                next_action = self.diffusion.sample(model=self.actor, state=next_state)
+                next_action = self.diffusion.sample(model=self.actor, state=next_state, sampler="onestep")
                 target_q1, target_q2 = self.critic_target(next_state, next_action)
                 target_q = torch.min(target_q1, target_q2)
             target_q = (reward + not_done * self.discount * target_q).detach()
@@ -190,11 +190,11 @@ class CPQL(object):
 
         return metric
 
-    def sample_action(self, state, num=10):
+    def sample_action(self, state, sampler="onestep", num=10):
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
         state_rpt = torch.repeat_interleave(state, repeats=50, dim=0)
         with torch.no_grad():
-            action = self.diffusion.sample(model=self.actor, state=state_rpt)
+            action = self.diffusion.sample(model=self.actor, state=state_rpt, sampler=sampler)
             q_value = self.critic_target.q_min(state_rpt, action).flatten()
         
         idx = torch.multinomial(F.softmax(q_value), 1)

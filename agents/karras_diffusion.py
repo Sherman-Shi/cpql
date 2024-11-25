@@ -201,17 +201,18 @@ class KarrasDenoiser:
             denoised = denoised.clamp(-1, 1)
         return model_output, denoised
 
-    def sample(self, model, state):
-        if self.sampler == "onestep":  
+    def sample(self, model, state, sampler=None):
+        if not sampler: sampler = self.sampler
+        if sampler == "onestep":  
             x_0 = self.sample_onestep(model, state, num=self.sample_num)
-        elif self.sampler == "multistep":
+        elif sampler == "multistep":
             x_0 = self.sample_multistep(model, state)
-        elif self.sampler == "onestep_monte_carlo":
+        elif sampler == "onestep_monte_carlo":
             x_0 = self.sample_monte_carlo(model, state, num=self.sample_num)
-        elif self.sampler == "onestep_quasi_monte_carlo":
+        elif sampler == "onestep_quasi_monte_carlo":
             x_0 = self.sample_quasi_monte_carlo(model, state, num=self.sample_num)
         else:
-            raise ValueError(f"Unknown sampler {self.sampler}")
+            raise ValueError(f"Unknown sampler {sampler}")
 
         if self.clip_denoised:
             x_0 = x_0.clamp(-1, 1)
@@ -228,36 +229,57 @@ class KarrasDenoiser:
             s_in = x_T.new_ones([x_T.shape[0]])
             return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
         
-    def sample_monte_carlo(self, model, state, num=1000):
+    def sample_monte_carlo(self, model, state, num=10):
         """
-        Monte Carlo sampling using standard normal distribution.
-        """
-        if state is not None:
-            x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
-            s_in = x_T.new_ones([x_T.shape[0]])
-            state_repeated = state.repeat(num, 1)
-            return self.denoise(model, x_T, self.sigmas[0] * s_in, state_repeated)[1]
-        else:
-            x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
-            s_in = x_T.new_ones([x_T.shape[0]])
-            return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
+        Monte Carlo sampling with interleaved repetition of MC samples and state repeats.
 
-    def sample_quasi_monte_carlo(self, model, state, num=1000, seed=None):
-        """
-        Quasi-Monte Carlo sampling using scrambled Sobol sequence.
+        - States are repeated as `1, 1, 1, 2, 2, 2, ...`.
+        - MC samples are interleaved as `1, 2, 3, 1, 2, 3, ...`.
         """
         dim = self.action_dim
-        if state is not None:
-            # Generate QMC samples
-            qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device) * self.sigma_max
-            s_in = qmc_samples.new_ones([qmc_samples.shape[0]])
-            state_repeated = state.repeat(num, 1)
-            return self.denoise(model, qmc_samples, self.sigmas[0] * s_in, state_repeated)[1]
-        else:
-            qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device) * self.sigma_max
-            s_in = qmc_samples.new_ones([qmc_samples.shape[0]])
-            return self.denoise(model, qmc_samples, self.sigmas[0] * s_in, None)[1]
-        
+        batch_size = state.shape[0]
+
+        # Generate Monte Carlo samples
+        base_mc_samples = th.randn((num, dim), device=self.device) * self.sigma_max  # Shape: (num, action_dim)
+
+        # Repeat MC samples for interleaving
+        mc_samples = base_mc_samples.repeat(batch_size, 1)  # Shape: (batch_size * num, action_dim)
+
+        # Repeat states for interleaving
+        state_repeated = state.repeat_interleave(num, dim=0)  # Shape: (batch_size * num, state_dim)
+
+        # Create the input scaling tensor
+        s_in = mc_samples.new_ones((batch_size * num,))  # Shape: (batch_size * num,)
+
+        return self.denoise(model, mc_samples, self.sigmas[0] * s_in, state_repeated)[1]
+
+    def sample_quasi_monte_carlo(self, model, state, num=10, seed=None):
+        """
+        Quasi-Monte Carlo sampling with interleaved repetition of QMC samples and state repeats.
+
+        - States are repeated as `1, 1, 1, 2, 2, 2, ...`.
+        - QMC samples are interleaved as `1, 2, 3, 1, 2, 3, ...`.
+        """
+        dim = self.action_dim
+        batch_size = state.shape[0]
+
+        # Generate a fixed set of QMC samples (shared across the batch)
+        base_qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device)  # Shape: (num, action_dim)
+
+        # Scale the QMC samples
+        base_qmc_samples = base_qmc_samples * self.sigma_max  # Shape: (num, action_dim)
+
+        # Repeat QMC samples for interleaving
+        qmc_samples = base_qmc_samples.repeat(batch_size, 1)  # Shape: (batch_size * num, action_dim)
+
+        # Repeat states for interleaving
+        state_repeated = state.repeat_interleave(num, dim=0)  # Shape: (batch_size * num, state_dim)
+
+        # Create the input scaling tensor
+        s_in = qmc_samples.new_ones((batch_size * num,))  # Shape: (batch_size * num,)
+
+        return self.denoise(model, qmc_samples, self.sigmas[0] * s_in, state_repeated)[1]
+
     def sample_multistep(self, model, state, num=1000):
         if state is not None:
             x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
