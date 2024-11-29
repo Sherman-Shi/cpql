@@ -310,8 +310,8 @@ if __name__ == "__main__":
         args.reward_tune = 'no'
         #args.sampler = 'onestep'
     
-        args.eval_freq = 50
-        args.eval_episodes = 10 
+        args.eval_freq = 10
+        args.eval_episodes = 3 
 
     # Setup Logging
     file_name = 'QL' if args.q_mode == 'q' else 'IQL'
