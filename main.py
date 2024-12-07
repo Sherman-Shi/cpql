@@ -65,6 +65,7 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                   q_mode=args.q_mode,
                   sampler=args.sampler,
                   sample_num=args.sample_num,
+                  TD_sample=args.TD_sample,
                   expectile=args.expectile,
                   memory_size=args.memory_size,)
 
@@ -266,8 +267,9 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=256, type=int, help='batch size (default: 256)')
     parser.add_argument("--lr_decay", action='store_true')
     parser.add_argument("--discount", default=0.99, type=float, help='discount factor for reward (default: 0.99)')
-    parser.add_argument("--sampler", default="onestep_quasi_monte_carlo")
-    parser.add_argument("--sample_num", default=10, type=int)
+    parser.add_argument("--sampler", default="onestep_quasi_monte_carlo", help="the type of sampler used, include onestep montecarlo, onestep multi sample montecarlo and one step multisample quasi monte carlo")
+    parser.add_argument("--sample_num", default=10, type=int, help="the number of samples used in the experiments")
+    parser.add_argument("--TD_sample", default=False, type=bool, help="whether to use sampling in computing the target value for TD learning")
 
     # wandb log
     parser.add_argument("--group", default="Quasi-CPQL-dev", type=str)

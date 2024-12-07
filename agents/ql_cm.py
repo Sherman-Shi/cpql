@@ -36,6 +36,7 @@ class CPQL(object):
                  expectile=0.6,
                  sampler="onestep",
                  sample_num=10,
+                 TD_sample=False,
                  memory_size=1e6,
                  ):
 
@@ -83,6 +84,9 @@ class CPQL(object):
         self.device = device
         self.max_q_backup = max_q_backup
         self.q_mode = q_mode
+        self.sampler = sampler 
+        self.sample_num = sample_num
+        self.TD_sample = TD_sample
         
         self.memory = ReplayMemory(state_dim, action_dim, memory_size, device)
 
@@ -104,6 +108,7 @@ class CPQL(object):
         """ Q Training """
         current_q1, current_q2 = self.critic(state, action)
         if self.q_mode == 'q':
+            # TODO 11.30: including options for sampling in the {if self.max_q_backup:}
             if self.max_q_backup:
                 next_state_rpt = torch.repeat_interleave(next_state, repeats=10, dim=0)
                 next_action_rpt = self.diffusion.sample(model=self.actor, state=next_state_rpt)
@@ -112,9 +117,21 @@ class CPQL(object):
                 target_q2 = target_q2.view(batch_size, 10).max(dim=1, keepdim=True)[0]
                 target_q = torch.min(target_q1, target_q2)
             else:
-                next_action = self.diffusion.sample(model=self.actor, state=next_state, sampler="onestep")
-                target_q1, target_q2 = self.critic_target(next_state, next_action)
-                target_q = torch.min(target_q1, target_q2)
+                if not self.TD_sample:
+                    next_action = self.diffusion.sample(model=self.actor, state=next_state, sampler="onestep")
+                    target_q1, target_q2 = self.critic_target(next_state, next_action)
+                    target_q = torch.min(target_q1, target_q2)
+                else:
+                    next_actions = self.diffusion.sample(model=self.actor, state=next_state, sampler=self.sampler)
+                    next_state_rpt = next_state.repeat_interleave(self.diffusion.sample_num, dim=0)
+                    target_q1, target_q2 = self.critic_target(next_state_rpt, next_actions)
+                    # Compute means of target_q1 and target_q2
+                    target_q1_mean = target_q1.view(batch_size, self.diffusion.sample_num).mean(dim=1, keepdim=True)
+                    target_q2_mean = target_q2.view(batch_size, self.diffusion.sample_num).mean(dim=1, keepdim=True)
+                    
+                    # Take the min of the means
+                    target_q = torch.min(target_q1_mean, target_q2_mean)           
+                
             target_q = (reward + not_done * self.discount * target_q).detach()
 
             critic_loss = F.mse_loss(current_q1, target_q) + F.mse_loss(current_q2, target_q) 
