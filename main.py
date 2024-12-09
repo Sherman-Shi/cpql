@@ -252,7 +252,7 @@ if __name__ == "__main__":
     ### Experimental Setups ###
     parser.add_argument('--device', default=0, type=int) 
 
-    parser.add_argument('--rl_type', default="onfline", type=str, help='offline or online RL tasks (default: offline)') 
+    parser.add_argument('--rl_type', default="online", type=str, help='offline or online RL tasks (default: offline)') 
     parser.add_argument("--q_mode", default="q", type=str, help='q for CPQL and q_v for CPIQL') 
 
     parser.add_argument("--env_name", default="HalfCheetah-v3", type=str, help='Mujoco Gym environment') 

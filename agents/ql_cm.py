@@ -125,12 +125,13 @@ class CPQL(object):
                     next_actions = self.diffusion.sample(model=self.actor, state=next_state, sampler=self.sampler)
                     next_state_rpt = next_state.repeat_interleave(self.diffusion.sample_num, dim=0)
                     target_q1, target_q2 = self.critic_target(next_state_rpt, next_actions)
-                    # Compute means of target_q1 and target_q2
-                    target_q1_mean = target_q1.view(batch_size, self.diffusion.sample_num).mean(dim=1, keepdim=True)
-                    target_q2_mean = target_q2.view(batch_size, self.diffusion.sample_num).mean(dim=1, keepdim=True)
                     
-                    # Take the min of the means
-                    target_q = torch.min(target_q1_mean, target_q2_mean)           
+                    # Take the element-wise minimum of target_q1 and target_q2
+                    target_q_min = torch.min(target_q1, target_q2)  # Shape: (batch_size * sample_num, 1)
+                    
+                    # Reshape and compute the mean across samples
+                    target_q = target_q_min.view(batch_size, self.diffusion.sample_num).mean(dim=1, keepdim=True)
+                
                 
             target_q = (reward + not_done * self.discount * target_q).detach()
 

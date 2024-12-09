@@ -19,12 +19,12 @@ mkdir -p "${LOG_DIR}"
 
 # Array of environment names to test
 # ENV_NAMES=("HalfCheetah-v3" "Swimmer-v3" "Walker2d-v3" "Ant-v3" "Humanoid-v3" "HumanoidStandup-v2")
-ENV_NAMES=("Ant-v3" "Humanoid-v3")
+ENV_NAMES=("Humanoid-v3" "HumanoidStandup-v2")
 
 # Parameter configurations (samplers)
 CONFIGS=(
-    "Monte-TD-CPQL-dev onestep_monte_carlo 5"
-    "Quasi-TD-CPQL-dev onestep_quasi_monte_carlo 5"
+    "Monte-TD-min-mean-CPQL-dev onestep_monte_carlo 256"
+    "Quasi-TD-min-mean-CPQL-dev onestep_quasi_monte_carlo 256"
 )
 
 # Timestamp for log files
@@ -32,7 +32,7 @@ TIMESTAMP=$(date +'%Y%m%d_%H%M%S')
 
 # Device counter
 DEVICE_COUNT=${#DEVICES[@]}
-DEVICE_IDX=3
+DEVICE_IDX=2
 
 # Iterate over environments and configurations and launch jobs on different devices
 for ENV_NAME in "${ENV_NAMES[@]}"
