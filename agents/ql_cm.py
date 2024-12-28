@@ -38,6 +38,7 @@ class CPQL(object):
                  sample_num=10,
                  TD_sample=False,
                  memory_size=1e6,
+                 clip_denoised=True
                  ):
 
         self.actor = MLP(state_dim=state_dim, action_dim=action_dim, device=device).to(device)
@@ -48,7 +49,8 @@ class CPQL(object):
                                         sigma_max=sigma_max,
                                         device=device,
                                         sampler=sampler,
-                                        sample_num=sample_num)
+                                        sample_num=sample_num,
+                                        clip_denoised=clip_denoised)
 
         self.lr_decay = lr_decay
         self.grad_norm = grad_norm

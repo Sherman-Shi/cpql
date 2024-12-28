@@ -4,6 +4,8 @@
 /utils/__pycache__/
 __pycache__/
 /logs
+/visualization
+/logs_visualization
 
 *.pyc
 *.log
