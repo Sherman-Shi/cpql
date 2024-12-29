@@ -9,6 +9,7 @@ import d4rl
 from utils import utils
 from utils.data_sampler import Data_Sampler
 from utils.logger import logger, setup_logger
+from utils.qmc_sampling import generate_qmc_normal_samples, SampledAgent
 from torch.utils.tensorboard import SummaryWriter
 import wandb  # Import W&B
 
@@ -37,6 +38,7 @@ online_hyperparameters = {
     'mujoco': {'lr': 3e-4, 'alpha': 0.05, 'eta': 1.0, 'num_epochs': 1000, 'gn': 2.0},
     'dmc':    {'lr': 3e-4, 'alpha': 0.05, 'eta': 1.0, 'num_epochs': 500 , 'gn': 2.0},
 }
+
 
 def train_agent(env, state_dim, action_dim, device, output_dir, args):
 
@@ -68,6 +70,11 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                   TD_sample=args.TD_sample,
                   expectile=args.expectile,
                   memory_size=args.memory_size,)
+    sampling_agent = SampledAgent(action_dim=action_dim,
+                                  num_steps_per_epoch=args.num_steps_per_epoch,
+                                  sample_num=args.exploration_sample_num,
+                                  seed=args.seed,
+    )
 
     writer = SummaryWriter(output_dir) 
 
@@ -147,7 +154,12 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                 if training_iters < args.online_start_steps:
                     action = env.action_space.sample()
                 else:
-                    action = agent.sample_action(state)
+                    if args.quasi_explore==True: 
+                        # TODO: Use quasi monte carlo sampling to generate the normal_samples for each episode step 
+                        normal_sample = sampling_agent.get_normal_sample(episode_steps)
+                    else:
+                        normal_sample = None 
+                    action = agent.sample_action(state, normal_samples=normal_sample, q_weighting=False, action_clip=False)
                 next_state, reward, done, _ = env.step(action)
                 agent.append_memory(state, action, reward, next_state, 1. - done)
                 state = next_state
@@ -250,13 +262,13 @@ def eval_policy(policy, rl_type, env_name, seed, eval_episodes=10):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     ### Experimental Setups ###
-    parser.add_argument('--device', default=0, type=int) 
+    parser.add_argument('--device', default=3, type=int) 
 
     parser.add_argument('--rl_type', default="online", type=str, help='offline or online RL tasks (default: offline)') 
     parser.add_argument("--q_mode", default="q", type=str, help='q for CPQL and q_v for CPIQL') 
 
-    parser.add_argument("--env_name", default="HalfCheetah-v3", type=str, help='Mujoco Gym environment') 
-    parser.add_argument("--seed", default=0, type=int, help='random seed (default: 0)') 
+    parser.add_argument("--env_name", default="Swimmer-v3", type=str, help='Mujoco Gym environment') 
+    parser.add_argument("--seed", default=26, type=int, help='random seed (default: 0)') 
 
     parser.add_argument("--dir", default="results", type=str) 
     parser.add_argument('--save_checkpoints', action='store_true')
@@ -268,11 +280,12 @@ if __name__ == "__main__":
     parser.add_argument("--lr_decay", action='store_true')
     parser.add_argument("--discount", default=0.99, type=float, help='discount factor for reward (default: 0.99)')
     parser.add_argument("--sampler", default="onestep_quasi_monte_carlo", help="the type of sampler used, include onestep montecarlo, onestep multi sample montecarlo and one step multisample quasi monte carlo")
-    parser.add_argument("--sample_num", default=10, type=int, help="the number of samples used in the experiments")
+    parser.add_argument("--sample_num", default=128, type=int, help="the number of samples used in the experiments")
+    parser.add_argument("--exploration_sample_num", default=256, type=int, help="the number of samples used in the experiments")
     parser.add_argument("--TD_sample", default=False, type=bool, help="whether to use sampling in computing the target value for TD learning")
-
+    parser.add_argument("--quasi_explore", default=True, type=bool, help="whether we use quasi monte carlo sampling based explore strategy")
     # wandb log
-    parser.add_argument("--group", default="Quasi-CPQL-dev", type=str)
+    parser.add_argument("--group", default="CPQL-quasi-explore-dev", type=str)
     args = parser.parse_args()
 
     if args.rl_type == 'online' and args.q_mode == 'q_v':

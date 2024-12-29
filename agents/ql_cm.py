@@ -210,17 +210,23 @@ class CPQL(object):
 
         return metric
 
-    def sample_action(self, state, sampler="onestep", num=10):
+    def sample_action(self, state, sampler="onestep", normal_samples=None, q_weighting=True, action_clip=True, repeat_num=50):
         state = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
-        state_rpt = torch.repeat_interleave(state, repeats=50, dim=0)
-        with torch.no_grad():
-            action = self.diffusion.sample(model=self.actor, state=state_rpt, sampler=sampler)
-            q_value = self.critic_target.q_min(state_rpt, action).flatten()
-        
-        idx = torch.multinomial(F.softmax(q_value), 1)
-        action = action[idx].cpu().data.numpy().flatten()
+        if q_weighting:
+            state_rpt = torch.repeat_interleave(state, repeats=repeat_num, dim=0)
+            with torch.no_grad():
+                action = self.diffusion.sample(model=self.actor, state=state_rpt, normal_samples=normal_samples, sampler=sampler)
+                q_value = self.critic_target.q_min(state_rpt, action).flatten()
+            
+            idx = torch.multinomial(F.softmax(q_value), 1)
+            action = action[idx].cpu().data.numpy().flatten()
+        else:
+            action = self.diffusion.sample(model=self.actor, state=state, normal_samples=normal_samples, sampler=sampler)
+            action = action[0].cpu().data.numpy().flatten()
 
-        action = action.clip(-1, 1)
+        if action_clip:
+            action = action.clip(-1, 1)
+
         action = action * self.action_scale + self.action_bias
         return action
 

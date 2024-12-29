@@ -201,10 +201,11 @@ class KarrasDenoiser:
             denoised = denoised.clamp(-1, 1)
         return model_output, denoised
 
-    def sample(self, model, state, sampler=None):
+    def sample(self, model, state, normal_samples=None, sampler=None):
         if not sampler: sampler = self.sampler
+        # get one monte carlo sample 
         if sampler == "onestep":  
-            x_0 = self.sample_onestep(model, state, num=self.sample_num)
+            x_0 = self.sample_onestep(model, state, normal_samples=None, num=self.sample_num)
         elif sampler == "multistep":
             x_0 = self.sample_multistep(model, state)
         elif sampler == "onestep_monte_carlo":
@@ -219,16 +220,31 @@ class KarrasDenoiser:
 
         return x_0
     
-    def sample_onestep(self, model, state, num=1000):
-        if state is not None:
-            x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
+    def sample_onestep(self, model, state, normal_samples=None, num=1000):
+        if normal_samples is None:
+            if state is not None:
+                x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
+                s_in = x_T.new_ones([x_T.shape[0]])
+                return self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
+            else:
+                x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
+                s_in = x_T.new_ones([x_T.shape[0]])
+                return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
+        else:
+            assert normal_samples.shape == (state.shape[0], self.action_dim), \
+                f"Expected shape of normal_samples to be ({state.shape[0]}, {self.action_dim}), but got {normal_samples.shape}"
+            
+            # Use normal_samples as x_T
+            x_T = normal_samples * self.sigma_max 
             s_in = x_T.new_ones([x_T.shape[0]])
             return self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
-        else:
-            x_T = th.randn((num, self.action_dim), device=self.device) * self.sigma_max
-            s_in = x_T.new_ones([x_T.shape[0]])
-            return self.denoise(model, x_T, self.sigmas[0] * s_in, None)[1]
-        
+
+    def sample_fixed_onestep(self, model, state, normal_samples):
+
+        x_T = th.randn((state.shape[0], self.action_dim), device=self.device) * self.sigma_max
+        s_in = x_T.new_ones([x_T.shape[0]])
+        return self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
+    
     def sample_monte_carlo(self, model, state, num=10):
         """
         Monte Carlo sampling with interleaved repetition of MC samples and state repeats.
