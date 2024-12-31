@@ -7,6 +7,7 @@ import torch
 
 import d4rl
 from utils import utils
+from utils.utils import str2bool
 from utils.data_sampler import Data_Sampler
 from utils.logger import logger, setup_logger
 from utils.qmc_sampling import generate_qmc_normal_samples, SampledAgent
@@ -42,7 +43,7 @@ online_hyperparameters = {
 
 def train_agent(env, state_dim, action_dim, device, output_dir, args):
 
-    wandb.init(project="consistency_dev", group=args.group, config=args.__dict__)
+    wandb.init(project="Inherent_Exploration_Sampling_dev", group=args.group, config=args.__dict__)
 
     if args.rl_type == 'offline':
         # Load buffer
@@ -240,7 +241,7 @@ def eval_policy(policy, rl_type, env_name, seed, eval_episodes=10):
         traj_return = 0.
         state, done = eval_env.reset(), False
         while not done:
-            action = policy.sample_action(np.array(state))
+            action = policy.sample_action(np.array(state), q_weighting=False, action_clip=False)
             state, reward, done, _ = eval_env.step(action)
             traj_return += reward
         scores.append(traj_return)
@@ -282,8 +283,10 @@ if __name__ == "__main__":
     parser.add_argument("--sampler", default="onestep_quasi_monte_carlo", help="the type of sampler used, include onestep montecarlo, onestep multi sample montecarlo and one step multisample quasi monte carlo")
     parser.add_argument("--sample_num", default=128, type=int, help="the number of samples used in the experiments")
     parser.add_argument("--exploration_sample_num", default=256, type=int, help="the number of samples used in the experiments")
-    parser.add_argument("--TD_sample", default=False, type=bool, help="whether to use sampling in computing the target value for TD learning")
-    parser.add_argument("--quasi_explore", default=True, type=bool, help="whether we use quasi monte carlo sampling based explore strategy")
+    parser.add_argument("--TD_sample", type=str2bool, nargs='?', const=True, default=False,
+                        help="Enable sampling in computing the target value for TD learning")
+    parser.add_argument("--quasi_explore", type=str2bool, nargs='?', const=True, default=True,
+                        help="Enable quasi monte carlo sampling based exploration")
     # wandb log
     parser.add_argument("--group", default="CPQL-quasi-explore-dev", type=str)
     args = parser.parse_args()
