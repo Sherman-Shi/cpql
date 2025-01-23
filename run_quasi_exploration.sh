@@ -8,7 +8,7 @@
 ENV_LIST=("Swimmer-v3" "Ant-v3")
 
 # Corresponding CUDA devices for each environment
-DEVICE_LIST=(2 2)  # Adjust based on available GPUs
+DEVICE_LIST=(0 1)  # Adjust based on available GPUs
 
 # Number of runs per environment
 RUNS=1
@@ -57,10 +57,10 @@ for i in "${!ENV_LIST[@]}"; do
             --group $GROUP_NAME \
             --save_checkpoints \
             --quasi_explore True \
-            --TD_sample False \
+            --TD_sample True \
             --exploration_sample_num 256 \
             --sampler $SAMPLER \
-            --sample_num 128 \
+            --sample_num 64 \
             --num_steps_per_epoch 1000 \
             --online_start_steps 10000 \
             --batch_size 256 \

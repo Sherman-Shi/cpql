@@ -5,10 +5,10 @@
 # ===========================================
 
 # List of environments to test
-ENV_LIST=("Swimmer-v3")
+ENV_LIST=("Swimmer-v3" "Ant-v3")
 
 # Corresponding CUDA devices for each environment
-DEVICE_LIST=(3)  # Adjust based on available GPUs
+DEVICE_LIST=(2 2)  # Adjust based on available GPUs
 
 # Number of runs per environment
 RUNS=1
@@ -56,8 +56,8 @@ for i in "${!ENV_LIST[@]}"; do
             --dir $OUTPUT_DIR \
             --group $GROUP_NAME \
             --save_checkpoints \
-            --quasi_explore False \
-            --exploration_sample_num 256 \
+            --quasi_explore True \
+            --exploration_sample_num 4 \
             --sampler $SAMPLER \
             --sample_num 1 \
             --num_steps_per_epoch 1000 \

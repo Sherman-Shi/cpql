@@ -211,7 +211,7 @@ class KarrasDenoiser:
         elif sampler == "onestep_monte_carlo":
             x_0 = self.sample_monte_carlo(model, state, num=self.sample_num)
         elif sampler == "onestep_quasi_monte_carlo":
-            x_0 = self.sample_quasi_monte_carlo(model, state, num=self.sample_num)
+            x_0 = self.sample_quasi_monte_carlo(model, state, num=self.sample_num, normal_samples=normal_samples)
         else:
             raise ValueError(f"Unknown sampler {sampler}")
 
@@ -269,7 +269,7 @@ class KarrasDenoiser:
 
         return self.denoise(model, mc_samples, self.sigmas[0] * s_in, state_repeated)[1]
 
-    def sample_quasi_monte_carlo(self, model, state, num=10, seed=None):
+    def sample_quasi_monte_carlo(self, model, state, normal_samples=None, num=10, seed=None):
         """
         Quasi-Monte Carlo sampling with interleaved repetition of QMC samples and state repeats.
 
@@ -279,11 +279,17 @@ class KarrasDenoiser:
         dim = self.action_dim
         batch_size = state.shape[0]
 
-        # Generate a fixed set of QMC samples (shared across the batch)
-        base_qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device)  # Shape: (num, action_dim)
+        if normal_samples is None:
+            # Generate a fixed set of QMC samples (shared across the batch)
+            base_qmc_samples = generate_qmc_normal_samples(dim=dim, num_samples=num, seed=seed).to(self.device)  # Shape: (num, action_dim)
 
-        # Scale the QMC samples
-        base_qmc_samples = base_qmc_samples * self.sigma_max  # Shape: (num, action_dim)
+            # Scale the QMC samples
+            base_qmc_samples = base_qmc_samples * self.sigma_max  # Shape: (num, action_dim)
+
+        else: 
+            # Ensure provided normal_samples is on the correct device and has the right shape
+            assert normal_samples.shape == (num, self.action_dim), "normal_samples shape mismatch!"
+            base_qmc_samples = normal_samples.to(self.device) * self.sigma_max  # Move to device and scale
 
         # Repeat QMC samples for interleaving
         qmc_samples = base_qmc_samples.repeat(batch_size, 1)  # Shape: (batch_size * num, action_dim)

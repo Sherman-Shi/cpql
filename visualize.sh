@@ -10,21 +10,21 @@
 
 # Input Parameters
 ENV_NAME=${1:-"Swimmer-v3"}  # Default to Humanoid-v3 if not provided
-CHECKPOINT_DIR=${2:-"/home/sherman/Desktop/Consistency/results/online/Swimmer-v3/QL|99431|alpha-0.05|eta-1.0|sampler_onestep_quasi_monte_carlo|test_qnorm/"}  # Default checkpoint directory
+CHECKPOINT_DIR=${2:-"/home/sherman/Desktop/Consistency/results/online/Swimmer-v3/QL|15|alpha-0.05|eta-1.0|sampler_onestep_quasi_monte_carlo|test_qnorm/"}  # Default checkpoint directory
 DEVICE=${3:-0}             # Default CUDA device 0
 SAMPLER=${4:-"onestep_monte_carlo"}  # Default sampler
 TD_SAMPLE=${5:-False}       # Default TD_sample to False
 GROUP=${6:-"Quasi-CPQL-dev"} # Default group name for logging
 
 # Sample numbers to test
-SAMPLE_NUMS=(4096 4096 4096 4096 4096 4096 4096 4096 4096 4096 4096 4096)
+SAMPLE_NUMS=(512 512 512 512 512 1024 1024)
 
 # Directory to store logs
 LOG_DIR="logs_visualization"
 mkdir -p "${LOG_DIR}"
 
 # Repeat each sample_num configuration 10 times
-REPEAT=10  # Number of repetitions for each sample_num
+REPEAT=1  # Number of repetitions for each sample_num
 
 # Iterate over sample_num values
 for SAMPLE_NUM in "${SAMPLE_NUMS[@]}"

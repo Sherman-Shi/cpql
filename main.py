@@ -98,17 +98,17 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                                       log_writer=writer)
             training_iters += 1
 
-            writer.add_scalar('Loss/bc_loss', np.mean(loss_metric['bc_loss']), training_iters)
-            writer.add_scalar('Loss/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
-            writer.add_scalar('Loss/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
-            writer.add_scalar('Loss/critic_loss', np.mean(loss_metric['critic_loss']), training_iters)
+            writer.add_scalar('losses/bc_loss', np.mean(loss_metric['bc_loss']), training_iters)
+            writer.add_scalar('losses/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
+            writer.add_scalar('losses/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
+            writer.add_scalar('losses/qf_loss', np.mean(loss_metric['critic_loss']), training_iters)
 
             # Log losses to W&B
             wandb.log({
-                'Loss/bc_loss': np.mean(loss_metric['bc_loss']),
-                'Loss/ql_loss': np.mean(loss_metric['ql_loss']),
-                'Loss/actor_loss': np.mean(loss_metric['actor_loss']),
-                'Loss/critic_loss': np.mean(loss_metric['critic_loss']),
+                'losses/bc_loss': np.mean(loss_metric['bc_loss']),
+                'losses/ql_loss': np.mean(loss_metric['ql_loss']),
+                'losses/actor_loss': np.mean(loss_metric['actor_loss']),
+                'losses/qf_loss': np.mean(loss_metric['critic_loss']),
                 'Training Iterations': training_iters,
             })     
 
@@ -180,16 +180,16 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
    
                 if loss_metric is not None:
                     wandb.log({
-                        'Loss/bc_loss': np.mean(loss_metric['bc_loss']),
-                        'Loss/ql_loss': np.mean(loss_metric['ql_loss']),
-                        'Loss/actor_loss': np.mean(loss_metric['actor_loss']),
-                        'Loss/critic_loss': np.mean(loss_metric['critic_loss']),
-                        'Training Iterations': training_iters,
+                        'losses/bc_loss': np.mean(loss_metric['bc_loss']),
+                        'losses/ql_loss': np.mean(loss_metric['ql_loss']),
+                        'losses/actor_loss': np.mean(loss_metric['actor_loss']),
+                        'losses/qf_loss': np.mean(loss_metric['critic_loss']),
+                        'global_step': training_iters,
                     })
-                    writer.add_scalar('Loss/bc_loss', np.mean(loss_metric['bc_loss']), training_iters)
-                    writer.add_scalar('Loss/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
-                    writer.add_scalar('Loss/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
-                    writer.add_scalar('Loss/critic_loss', np.mean(loss_metric['critic_loss']), training_iters)
+                    writer.add_scalar('losses/bc_loss', np.mean(loss_metric['bc_loss']), training_iters)
+                    writer.add_scalar('losses/ql_loss', np.mean(loss_metric['ql_loss']), training_iters)
+                    writer.add_scalar('losses/actor_loss', np.mean(loss_metric['actor_loss']), training_iters)
+                    writer.add_scalar('losses/qf_loss', np.mean(loss_metric['critic_loss']), training_iters)
                 
                 # Logging
                 if training_iters % log_interval == 0:
@@ -213,7 +213,7 @@ def train_agent(env, state_dim, action_dim, device, output_dir, args):
                     wandb.log({
                         'Eval/avg': eval_res,
                         'Eval/std': eval_res_std,
-                        'Training Iterations': training_iters,
+                        'global_step': training_iters,
                     })
                     
                     writer.add_scalar('Eval/avg', eval_res, training_iters)
@@ -268,8 +268,8 @@ if __name__ == "__main__":
     parser.add_argument('--rl_type', default="online", type=str, help='offline or online RL tasks (default: offline)') 
     parser.add_argument("--q_mode", default="q", type=str, help='q for CPQL and q_v for CPIQL') 
 
-    parser.add_argument("--env_name", default="Swimmer-v3", type=str, help='Mujoco Gym environment') 
-    parser.add_argument("--seed", default=26, type=int, help='random seed (default: 0)') 
+    parser.add_argument("--env_name", default="Swimmer-v4", type=str, help='Mujoco Gym environment') 
+    parser.add_argument("--seed", default=18274185, type=int, help='random seed (default: 0)') 
 
     parser.add_argument("--dir", default="results", type=str) 
     parser.add_argument('--save_checkpoints', action='store_true')

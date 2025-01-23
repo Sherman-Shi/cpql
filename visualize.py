@@ -7,6 +7,42 @@ import gym
 import argparse
 import datetime
 
+
+import math 
+
+from scipy.special import erfinv
+from scipy.stats import norm, qmc
+
+
+def Normdf_inv(sample):
+    v = 0.5 + (1 - np.finfo(sample.dtype).eps) * (sample - 0.5)
+    norm_sample = erfinv(2 * v - 1) * math.sqrt(2)
+    return norm_sample
+
+def generate_qmc_normal_samples(dim, num_samples, seed=None):
+    """
+    Generate samples from a multivariate normal distribution using Quasi-Monte Carlo
+    sampling with a scrambled Sobol sequence.
+
+    Parameters:
+    - dim (int): Dimension of the normal distribution (number of independent normal variables).
+    - num_samples (int): Number of samples to generate.
+    - seed (int, optional): Seed for the random number generator used in scrambling.
+
+    Returns:
+    - numpy.ndarray: Samples from a multivariate normal distribution.
+    """
+    # Initialize the Sobol sequence generator with scrambling
+    sobol = qmc.Sobol(d=dim, scramble=True, seed=seed)
+    
+    # Generate QMC samples from a uniform distribution [0, 1)
+    uniform_samples = sobol.random(n=num_samples)
+
+    # Convert uniform samples to normal samples using the inverse CDF (quantile function)
+    normal_samples = Normdf_inv(uniform_samples)
+
+    return torch.tensor(normal_samples, dtype=torch.float32)
+
 offline_hyperparameters = {
     'halfcheetah-medium-v2':         {'lr': 3e-4, 'alpha': 1.0, 'eta': 2.0,   'num_epochs': 2000, 'gn': 9.0,  'expectile': 0.7},
     'halfcheetah-medium-replay-v2':  {'lr': 3e-4, 'alpha': 1.0, 'eta': 2.0,   'num_epochs': 2000, 'gn': 2.0,  'expectile': 0.7},
@@ -64,57 +100,66 @@ def visualize_agent(env, state_dim, action_dim, device, args, actor_dir):
     agent.actor.eval()  # Set the actor to evaluation mode
 
     # Sample a random state from the environment
-    # Check if state space has infinite bounds and handle it
     low, high = env.observation_space.low, env.observation_space.high
-
-    # If there are infinite bounds, replace them with some large values
     low = np.where(np.isinf(low), -10.0, low)
     high = np.where(np.isinf(high), 10.0, high)
-
-    # Sample a state from the modified state space
     sampled_state = np.random.uniform(low, high)  # Random state within the bounds
     sampled_state = torch.tensor(sampled_state, dtype=torch.float32).unsqueeze(0).to(device)
-    
-    # Sample actions using the agent's diffusion model
-    actions = agent.diffusion.sample(model=agent.actor, state=sampled_state, sampler=args.sampler)
 
-    # If actions are multi-dimensional, reduce them to 2D for visualization (if necessary)
-    if action_dim > 2:
-        actions = actions[:, :2]  # Just take the first two dimensions of the action for visualization
+    # Generate QMC samples
+    qmc_samples = generate_qmc_normal_samples(dim=action_dim, num_samples=args.sample_num, seed=args.seed).to(device)
 
-    
-    # Create a scatter plot of the actions (distribution)
-    plt.figure(figsize=(8, 6))
-    # Detach the actions tensor from the computation graph and convert to numpy for plotting
+    # Generate actions using the QMC samples
+    actions = agent.diffusion.sample(model=agent.actor, state=sampled_state, normal_samples=qmc_samples, sampler=args.sampler)
+
+    # Optionally reorder samples and actions based on one dimension
+    if args.reorder:
+        order = torch.argsort(qmc_samples[:, 0])
+        qmc_samples = qmc_samples[order]
+        actions = actions[order]
+
+    # Detach tensors and move to CPU for visualization
+    qmc_samples = qmc_samples.detach().cpu().numpy()
     actions = actions.detach().cpu().numpy()
-    print(actions)
-    print(sampled_state)
 
+    # Use PCA to reduce dimensionality to 2D for visualization
+    pca_qmc = PCA(n_components=2)
+    qmc_2d = pca_qmc.fit_transform(qmc_samples)
 
-    # Use PCA to reduce dimensionality of actions to 2 dimensions
-    pca = PCA(n_components=2)
-    actions_2d = pca.fit_transform(actions)  # Apply PCA
+    pca_actions = PCA(n_components=2)
+    actions_2d = pca_actions.fit_transform(actions)
 
-    # Plot the reduced actions (2D visualization)
-    plt.figure(figsize=(8, 6))
-    plt.scatter(actions_2d[:, 0], actions_2d[:, 1], alpha=0.5, s=10)
-    plt.title(f'Actions sampled from Consistency Policy Q Learning')
-    plt.xlabel('action dim 1')
-    plt.ylabel('action dim 2')
-    plt.grid(True)
+    # Create a larger figure with subplots
+    fig, axs = plt.subplots(1, 2, figsize=(16, 8))
 
-    # Ensure the visualization directory exists
+    # Color map from light orange to light blue
+    colors = plt.get_cmap('Spectral')
+    color_indices = np.arange(qmc_2d.shape[0])
+
+    # Scatter plot for QMC samples
+    sc1 = axs[0].scatter(qmc_2d[:, 0], qmc_2d[:, 1], c=color_indices, cmap=colors, alpha=0.7)
+    axs[0].set_title('QMC Samples PCA Visualization')
+    axs[0].set_xlabel('PCA Dimension 1')
+    axs[0].set_ylabel('PCA Dimension 2')
+    fig.colorbar(sc1, ax=axs[0], label='Sample Index')
+
+    # Scatter plot for actions
+    sc2 = axs[1].scatter(actions_2d[:, 0], actions_2d[:, 1], c=color_indices, cmap=colors, alpha=0.7)
+    axs[1].set_title('Actions PCA Visualization')
+    axs[1].set_xlabel('PCA Dimension 1')
+    axs[1].set_ylabel('PCA Dimension 2')
+    fig.colorbar(sc2, ax=axs[1], label='Sample Index')
+
+    # Save the plot
     visualization_dir = "visualization"
     os.makedirs(visualization_dir, exist_ok=True)
-
-    # Save the plot with timestamp
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    plot_filename = f"{args.env_name}_PCA_actions_{args.sampler}_samplenum_{args.sample_num}_{timestamp}.png"
+    plot_filename = f"A_{args.env_name}_PCA_actions_{args.sampler}_samplenum_{args.sample_num}_seed{args.seed}_{timestamp}.png"
     plot_filepath = os.path.join(visualization_dir, plot_filename)
     plt.savefig(plot_filepath)
 
-    print(f"Saved PCA-reduced action distribution plot to {plot_filepath}")
-    plt.close()  # Close the plot to free up memory
+    print(f"Saved PCA visualization plot to {plot_filepath}")
+    plt.close()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -122,9 +167,9 @@ if __name__ == "__main__":
     parser.add_argument('--device', default=0, type=int)
     parser.add_argument('--rl_type', default="online", type=str, help='offline or online RL tasks (default: offline)')
     parser.add_argument("--q_mode", default="q", type=str, help='q for CPQL and q_v for CPIQL')
-    parser.add_argument("--env_name", default="Hopper-v3", type=str, help='Mujoco Gym environment')
-    parser.add_argument("--seed", default=0, type=int, help='random seed (default: 0)')
-    parser.add_argument("--dir", default="/home/sherman/Desktop/Consistency/results/online/Hopper-v3/QL|1847|alpha-0.05|eta-1.0|sampler_onestep_quasi_monte_carlo|test_qnorm/", type=str)
+    parser.add_argument("--env_name", default="Swimmer-v3", type=str, help='Mujoco Gym environment')
+    parser.add_argument("--seed", default=19, type=int, help='random seed (default: 0)')
+    parser.add_argument("--dir", default="/home/sherman/Desktop/Consistency/results/online/Swimmer-v3/QL|15|alpha-0.05|eta-1.0|sampler_onestep_quasi_monte_carlo|test_qnorm/", type=str)
     parser.add_argument('--save_checkpoints', action='store_true')
     parser.add_argument("--num_steps_per_epoch", default=1000, type=int)
     parser.add_argument("--online_start_steps", default=10000, type=int)
@@ -133,8 +178,9 @@ if __name__ == "__main__":
     parser.add_argument("--lr_decay", action='store_true')
     parser.add_argument("--discount", default=0.99, type=float, help='discount factor for reward (default: 0.99)')
     parser.add_argument("--sampler", default="onestep_quasi_monte_carlo", help="the type of sampler used, include onestep montecarlo, onestep multi sample montecarlo and one step multisample quasi monte carlo")
-    parser.add_argument("--sample_num", default=2048, type=int, help="the number of samples used in the experiments")
+    parser.add_argument("--sample_num", default=512, type=int, help="the number of samples used in the experiments")
     parser.add_argument("--TD_sample", default=False, type=bool, help="whether to use sampling in computing the target value for TD learning")
+    parser.add_argument("--reorder", default=True, type=bool, help="Reorder samples based on one dimension")
     # wandb log
     parser.add_argument("--group", default="Quasi-CPQL-dev", type=str)
     args = parser.parse_args()
